@@ -6,7 +6,7 @@ const { pool } = require('../database');
 const userValidationSchema = Joi.object({
     email: Joi.string().email().required(),
     mobile: Joi.string().pattern(/^\d{10}$/).required(),
-    status: Joi.string().valid('Active').required() // Strictly enforces 'Active'
+    status: Joi.string().valid('Active').required()
 });
 
 router.post('/validate', async (req, res) => {

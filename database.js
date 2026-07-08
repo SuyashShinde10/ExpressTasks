@@ -1,7 +1,6 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 const mysql = require('mysql2/promise');
 
-// Connection Details from .env
 const dbConfig = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
@@ -18,7 +17,6 @@ const pool = mysql.createPool(dbConfig);
 async function initializeDatabase() {
     let connection;
     try {
-        // First, connect WITHOUT the database name so we can create it if it doesn't exist
         const initPool = mysql.createPool({
             host: process.env.DB_HOST,
             port: process.env.DB_PORT,
@@ -31,11 +29,9 @@ async function initializeDatabase() {
         
         connection = await initPool.getConnection();
         
-        // Ensure the database exists
         await connection.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\``);
         await connection.query(`USE \`${process.env.DB_NAME}\``);
 
-        // Create tables
         await connection.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
