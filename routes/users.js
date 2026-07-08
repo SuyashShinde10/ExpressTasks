@@ -6,7 +6,7 @@ const { pool } = require('../database');
 const userValidationSchema = Joi.object({
     email: Joi.string().email().required(),
     mobile: Joi.string().pattern(/^\d{10}$/).required(),
-    status: Joi.string().valid('Active', 'Inactive').required()
+    status: Joi.string().valid('Active').required() // Strictly enforces 'Active'
 });
 
 router.post('/validate', async (req, res) => {
@@ -17,11 +17,7 @@ router.post('/validate', async (req, res) => {
         return res.status(400).json({ error: 'Validation failed', details: errorMessages });
     }
 
-    const { email, mobile, status } = value;
-
-    if (status !== 'Active') {
-        return res.status(400).json({ error: 'Validation failed', details: ['User status must be Active'] });
-    }
+    const { email, mobile } = value;
 
     let connection;
     try {
