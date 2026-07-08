@@ -1,65 +1,145 @@
-# Express & MySQL API Build Guide
+# Express.js & MySQL API Build Guide
 
-This document outlines the step-by-step process of building the complex Express.js API project using raw MySQL queries.
+**Project Repository**
+Source Code: https://github.com/SuyashShinde10/ExpressTasks
 
-## 1. Project Initialization & Setup
+This document outlines the architecture, code implementation, and testing procedures for the Express.js API project utilizing raw MySQL queries.
 
-The first step was to initialize a Node.js project and install the necessary dependencies:
+## 1. Global Architecture & Setup
+The project is initialized using Node.js with the following core dependencies: `express` (routing), `mysql2/promise` (async database communication), and `joi` (data validation).
 
-- **express**: To handle routing and server logic.
-- **mysql2**: To handle communication with the MySQL database. We specifically use `mysql2/promise` to allow for clean `async/await` syntax.
-- **joi**: For robust data validation in the user API endpoint.
+### Database Connection & Schema (`database.js`)
+- **Connection Pool:** `mysql.createPool(...)` manages multiple concurrent connections efficiently. Credentials are securely loaded via the `dotenv` package.
+- **Initialization Script:** An `initializeDatabase` function executes raw `CREATE TABLE IF NOT EXISTS` commands on server startup to ensure the `users`, `orders`, and `order_items` tables are ready before accepting traffic.
 
-```powershell
-mkdir express-mysql-api
-cd express-mysql-api
-npm init -y
-npm install express mysql2 joi
+## 2. Task 1: Complex Data Insertion API
+**Endpoint:** `POST /api/orders` | **File:** `routes/orders.js`
+
+This endpoint handles complex JSON payloads and relies heavily on MySQL transactions to write to three tables simultaneously while ensuring data consistency.
+
+### Data Validation
+Before processing, the system verifies all fields and checks for duplicate products within the request payload.
+```javascript
+const productNames = order.items.map(item => item.product_name);
+const uniqueProductNames = new Set(productNames);
+if (uniqueProductNames.size !== productNames.length) { /* return 400 */ }
 ```
 
-## 2. Database Connection and Schema Initialization
+### Transaction Management & Upserting
+A dedicated connection is acquired to begin a transaction. The system first checks if the user exists (by email and mobile) to either retrieve their existing ID or insert a new record. Server-side calculations determine the total order amount before inserting the order record. Finally, a bulk insert is performed for optimal efficiency.
+```javascript
+connection = await pool.getConnection();
+await connection.beginTransaction();
+// Upsert User, Insert Order, then Bulk Insert Items:
 
-We created a `database.js` file to establish a connection pool to the MySQL database. Using a connection pool ensures efficient resource management by reusing active connections rather than creating new ones on every request. 
+const itemValues = order.items.map(item => [orderId, item.product_name, item.quantity, item.price]);
+await connection.query('INSERT INTO order_items (...) VALUES ?', [itemValues]);
+await connection.commit();
+```
+If any query fails, `await connection.rollback();` is executed in the catch block to erase partial data.
 
-We also defined a startup function `initializeDatabase` that executes raw SQL commands to create the `express_demo` database and the three required tables if they don't already exist:
-1. `users`: Stores user details, ensuring email and mobile uniqueness.
-2. `orders`: Stores the order metadata and a foreign key to the `users` table.
-3. `order_items`: Stores the specific items belonging to an order and a foreign key to the `orders` table.
+## 3. Task 2: Complex Data Extraction API
+**Endpoint:** `GET /api/orders/:id` | **File:** `routes/orders.js`
 
-## 3. Creating the Server Entry Point
+This endpoint prevents the N+1 query problem by extracting all related data across the three tables using a single parameterized SQL `JOIN` query.
 
-We created `server.js` to act as the main entry point for the application. Here, we set up our Express app and mounted our route handlers for `/api/orders` and `/api/users`. Before starting the server, we call the `initializeDatabase()` function so that the application is guaranteed to have a ready schema before it accepts requests.
+### Query & Data Transformation
+```sql
+SELECT u.user_id, u.full_name, ... o.order_id, ... i.item_id, i.product_name ...
+FROM orders o
+JOIN users u ON o.user_id = u.user_id
+JOIN order_items i ON o.order_id = i.order_id
+WHERE o.order_id = ?
+```
+Because SQL returns flat tabular data, JavaScript logic transforms the array of rows into a deeply nested JSON object. User and order metadata are extracted from the first row, while the remaining rows are mapped to construct the items array.
 
-## 4. Implementing Task 1: Complex Data Insertion
+## 4. Task 3: User Validation API
+**Endpoint:** `POST /api/users/validate` | **File:** `routes/users.js`
 
-In `routes/orders.js`, we implemented the `POST /api/orders` endpoint.
+This endpoint runs validation logic in isolation without inserting data into the database.
 
-This endpoint receives a complex JSON payload and relies heavily on MySQL transactions to ensure data consistency.
+### Joi Schema & Constraint Checks
+A Joi schema enforces formatting (e.g., regex for exact 10-digit mobile numbers). Afterwards, the database is queried to ensure uniqueness.
+```javascript
+const userValidationSchema = Joi.object({
+  email: Joi.string().email().required(),
+  mobile: Joi.string().pattern(/^\d{10}$/).required(),
+  status: Joi.string().valid('Active', 'Inactive').required()
+});
 
-- **Validation**: We verify all fields are present and that there are no duplicate products in the array provided by the client.
-- **Transaction Start**: We acquire a dedicated connection from the pool and start the transaction (`BEGIN`).
-- **Upserting User**: We query the database to see if the user already exists using their email and mobile. If they do, we grab their existing ID. If they don't, we insert them and get the new ID.
-- **Calculating Totals**: We calculate the order total on the server side instead of trusting client data.
-- **Inserting Orders & Items**: We insert the order record, then we construct a bulk insertion query for the `order_items` table.
-- **Commit or Rollback**: If everything succeeds, we commit the transaction to make changes permanent. If any single query fails, we rollback the entire transaction to avoid partial data inserts. Finally, we release the connection back to the pool in a `finally` block.
+// Database constraint check:
+const [rows] = await connection.query(
+  'SELECT email, mobile FROM users WHERE email = ? OR mobile = ?',
+  [email, mobile]
+);
+```
+If duplicates are found, a `409 Conflict` is returned detailing exactly which fields caused the conflict.
 
-## 5. Implementing Task 2: Complex Data Extraction
+## 5. API Testing & Execution Guide (Postman)
+This section outlines the step-by-step procedures to verify the functionality of the API endpoints.
 
-In the same `routes/orders.js` file, we added the `GET /api/orders/:id` endpoint.
+### Test 1: User Validation (Success)
+- **Action:** Verify Joi validation and uniqueness logic.
+- **Configuration:** `POST` request to `http://localhost:3000/api/users/validate`
+- **Payload (Raw JSON):**
+```json
+{
+  "email": "johndoe@example.com",
+  "mobile": "1234567890",
+  "status": "Active"
+}
+```
+- **Result:** `200 OK` (Message: "User data is valid and can be registered.")
 
-To avoid the N+1 query problem, we wrote a single SQL query using `JOIN` statements to retrieve the `users`, `orders`, and `order_items` row data all at once.
+### Test 2: Complex Data Insertion
+- **Action:** Insert a user, order, and items using a single transaction.
+- **Configuration:** `POST` request to `http://localhost:3000/api/orders`
+- **Payload (Raw JSON):**
+```json
+{
+  "user": {
+    "full_name": "Rahul Sharma",
+    "email": "rahul@test.com",
+    "mobile": "9876543210"
+  },
+  "order": {
+    "order_date": "2026-07-06",
+    "items": [
+      { "product_name": "Laptop", "quantity": 1, "price": 55000 },
+      { "product_name": "Mouse", "quantity": 2, "price": 700 }
+    ]
+  }
+}
+```
+- **Result:** `201 Created` showing a calculated `total_amount` of `56400`.
+*Note: Executing this exact payload a second time will yield a 409 Conflict or 400 Bad Request, verifying the error handling logic.*
 
-Since SQL returns a flat tabular result where user and order details are repeated for every item, we implemented JavaScript logic to transform this flat array into a deeply nested JSON object. We take the user and order properties from the first row and construct an array out of the remaining item-specific columns.
+### Test 3: Complex Data Extraction
+- **Action:** Retrieve data across all three tables formatted as nested JSON.
+- **Configuration:** `GET` request to `http://localhost:3000/api/orders/1`
+- **Result:** `200 OK` returning the following formatted object:
+```json
+{
+  "user": {
+    "user_id": 1,
+    "full_name": "Rahul Sharma",
+    "email": "rahul@test.com",
+    "mobile": "9876543210",
+    "status": "Active"
+  },
+  "order": {
+    "order_id": 1,
+    "order_date": "2026-07-05T18:30:00.000Z",
+    "total_amount": "56400.00"
+  },
+  "items": [
+    { "item_id": 1, "product_name": "Laptop", "quantity": 1, "price": "55000.00" },
+    { "item_id": 2, "product_name": "Mouse", "quantity": 2, "price": "700.00" }
+  ]
+}
+```
 
-## 6. Implementing Task 3: User Validation API
-
-In `routes/users.js`, we implemented the `POST /api/users/validate` endpoint to handle data validation without actual insertion.
-
-- **Format Rules**: We built a Joi schema to validate the incoming request, strictly checking for valid email formatting and ensuring the mobile number was exactly 10 digits using Regex. We also verified the status was "Active".
-- **Database Rules**: We queried the database to check if the provided email or mobile number already exists to avoid future conflicts.
-- **Error Handling**: We returned specific error messages in the HTTP response. A `400 Bad Request` was used for formatting or status errors, and a `409 Conflict` was used when duplicates were found in the database.
-
-## Final Review
-- No Object Relational Mappers (ORMs) were used.
-- All database queries were fully parameterized to prevent SQL injection.
+## 6. Technical Summary
+- No Object Relational Mappers (ORMs) were used; all data modeling was handled natively.
+- All database queries utilize parameterized inputs to prevent SQL injection vulnerabilities.
 - Connection releasing is rigorously managed inside `finally` blocks for optimal memory and connection limit safety.
