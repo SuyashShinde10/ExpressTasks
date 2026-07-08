@@ -1,32 +1,29 @@
+require('dotenv').config();
 const mysql = require('mysql2/promise');
 
-const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'express_demo',
+// Aiven Connection Details
+const dbConfig = {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    // Required for Aiven SSL
+    ssl: { rejectUnauthorized: false }, 
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
-});
+};
+
+const pool = mysql.createPool(dbConfig);
 
 async function initializeDatabase() {
     let connection;
     try {
-        const initPool = mysql.createPool({
-            host: 'localhost',
-            user: 'root',
-            password: '',
-            waitForConnections: true,
-            connectionLimit: 1,
-            queueLimit: 0
-        });
-        
-        connection = await initPool.getConnection();
-        
-        await connection.query('CREATE DATABASE IF NOT EXISTS express_demo');
-        await connection.query('USE express_demo');
+        // Connect directly to defaultdb
+        connection = await pool.getConnection();
 
+        // Create tables inside defaultdb
         await connection.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,7 +54,7 @@ async function initializeDatabase() {
                 FOREIGN KEY (order_id) REFERENCES orders(order_id)
             )
         `);
-        console.log("Database initialized successfully.");
+        console.log("Database initialized successfully on Aiven!");
     } catch (error) {
         console.error("Error initializing database:", error);
     } finally {
