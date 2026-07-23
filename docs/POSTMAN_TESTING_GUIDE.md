@@ -102,4 +102,45 @@ This task verifies format requirements and strict status checks without insertin
 6. Click **Send**. 
 **Expected Result:** You should get a `200 OK` response: `{"message": "User data is valid and can be registered."}`
 
-*(Note: If you change the status to "Inactive", or make the mobile number 9 digits, it will instantly return a `400 Bad Request` with meaningful error messages).*
+*(Note: If you change the status to \"Inactive\", or make the mobile number 9 digits, it will instantly return a `400 Bad Request` with meaningful error messages).*
+
+---
+
+### Task 3 — Error Scenario A: Duplicate Email / Mobile (409)
+After you have created an order (Task 1), run the validate endpoint with the **same email or mobile** that already exists in the database:
+
+```json
+{
+  "email": "rahul@test.com",
+  "mobile": "9876543210",
+  "status": "Active"
+}
+```
+**Expected Result:** `409 Conflict`
+```json
+{
+  "error": "Conflict",
+  "details": ["Email already exists", "Mobile already exists"]
+}
+```
+
+---
+
+### Task 3 — Error Scenario B: Inactive User in DB (403)
+If a user exists in the database with `status = 'Inactive'` and you try to validate their email or mobile:
+
+```json
+{
+  "email": "inactive@test.com",
+  "mobile": "9999999999",
+  "status": "Active"
+}
+```
+**Expected Result:** `403 Forbidden`
+```json
+{
+  "error": "Account inactive",
+  "details": ["A user with this email or mobile exists but their account is Inactive."]
+}
+```
+*(To test this, manually update a user's status to 'Inactive' in MySQL: `UPDATE users SET status='Inactive' WHERE email='inactive@test.com';`)*

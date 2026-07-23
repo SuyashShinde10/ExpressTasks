@@ -13,7 +13,7 @@ We use `mysql2/promise` to allow modern `async/await` syntax instead of callback
 
 ## Task 1: Complex Data Insertion API
 **Endpoint:** `POST /api/orders`
-**File:** `routes/orders.js`
+**Files:** `src/routes/orders.routes.js` → `src/controllers/order.controller.js` → `src/services/order.service.js` → `src/models/order.model.js` & `src/models/user.model.js`
 
 This is the most complex part of the application because it requires writing to three different tables and must succeed or fail as a single unit (a transaction).
 
@@ -56,7 +56,7 @@ This allows us to insert 100 items into the database with a single query, which 
 
 ## Task 2: Complex Data Extraction API
 **Endpoint:** `GET /api/orders/:id`
-**File:** `routes/orders.js`
+**Files:** `src/routes/orders.routes.js` → `src/controllers/order.controller.js` → `src/models/order.model.js`
 
 This endpoint extracts all the data across the three tables using a single query to prevent the N+1 performance problem.
 
@@ -91,7 +91,7 @@ const result = {
 
 ## Task 3: User Validation API
 **Endpoint:** `POST /api/users/validate`
-**File:** `routes/users.js`
+**Files:** `src/routes/users.routes.js` → `src/middlewares/validate.js` → `src/controllers/user.controller.js` → `src/models/user.model.js`
 
 This API endpoint runs validation logic in isolation without actually inserting the user into the database.
 

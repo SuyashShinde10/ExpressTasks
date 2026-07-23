@@ -32,7 +32,7 @@ We created `server.js` to act as the main entry point for the application. Here,
 
 ## 4. Implementing Task 1: Complex Data Insertion
 
-In `routes/orders.js`, we implemented the `POST /api/orders` endpoint.
+In `src/routes/orders.routes.js`, we implemented the `POST /api/orders` endpoint.
 
 This endpoint receives a complex JSON payload and relies heavily on MySQL transactions to ensure data consistency.
 
@@ -45,7 +45,7 @@ This endpoint receives a complex JSON payload and relies heavily on MySQL transa
 
 ## 5. Implementing Task 2: Complex Data Extraction
 
-In the same `routes/orders.js` file, we added the `GET /api/orders/:id` endpoint.
+In the same `src/routes/orders.routes.js` file, we added the `GET /api/orders/:id` endpoint.
 
 To avoid the N+1 query problem, we wrote a single SQL query using `JOIN` statements to retrieve the `users`, `orders`, and `order_items` row data all at once.
 
@@ -53,11 +53,13 @@ Since SQL returns a flat tabular result where user and order details are repeate
 
 ## 6. Implementing Task 3: User Validation API
 
-In `routes/users.js`, we implemented the `POST /api/users/validate` endpoint to handle data validation without actual insertion.
+In `src/routes/users.routes.js`, we implemented the `POST /api/users/validate` endpoint to handle data validation without actual insertion.
 
 - **Format Rules**: We built a Joi schema to validate the incoming request, strictly checking for valid email formatting and ensuring the mobile number was exactly 10 digits using Regex. We also verified the status was "Active".
-- **Database Rules**: We queried the database to check if the provided email or mobile number already exists to avoid future conflicts.
-- **Error Handling**: We returned specific error messages in the HTTP response. A `400 Bad Request` was used for formatting or status errors, and a `409 Conflict` was used when duplicates were found in the database.
+- **Database Rules**: We queried the database (fetching `email`, `mobile`, and `status`) to check for conflicts. The controller applies a two-tier check:
+  1. If a matched user has `status = 'Inactive'` in the DB → `403 Forbidden` ("Account inactive").
+  2. If a matched Active user shares the email or mobile → `409 Conflict` with field-level details.
+- **Error Handling**: A `400 Bad Request` is returned for formatting or status errors (Joi layer), `403 Forbidden` for inactive accounts, `409 Conflict` for duplicate email/mobile, and `200 OK` when data is clean and safe to register.
 
 ## Final Review
 - No Object Relational Mappers (ORMs) were used.
