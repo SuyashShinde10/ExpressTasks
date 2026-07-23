@@ -5,7 +5,7 @@ This repository contains a modular, production-ready REST API built with Express
 ## Features & Tasks Completed
 - **Task 1: Complex Data Insertion:** A robust `POST /api/orders` endpoint that utilizes MySQL Transactions to insert a user, an order, and multiple bulk order items while ensuring atomic database states and preventing duplicate products.
 - **Task 2: Complex Data Extraction:** A highly optimized `GET /api/orders/:id` endpoint that solves the N+1 problem by retrieving data across three tables using a single `JOIN` query, parsing the flat tabular data into deeply nested JSON.
-- **Task 3: User Validation:** A `POST /api/users/validate` endpoint featuring custom Express middlewares and Joi schemas for rigorous format checking (email, 10-digit mobile, exact enum matches) and database conflict resolution.
+- **Task 3: User Validation:** A `POST /api/users/validate` endpoint featuring custom Express middlewares and Joi schemas for rigorous format checking (email, 10-digit mobile, exact enum matches). Implements a two-tier status check: Joi rejects non-Active inputs at the schema level (`400`), and the controller queries the DB to detect Inactive existing users (`403 Forbidden`) before checking for email/mobile duplicates (`409 Conflict`).
 
 ## Project Structure
 The codebase has been refactored into an industry-standard layered architecture:

@@ -3,7 +3,7 @@ const { pool } = require('../config/database');
 class UserModel {
     static async findByEmailOrMobile(email, mobile) {
         const [rows] = await pool.query(
-            'SELECT email, mobile FROM users WHERE email = ? OR mobile = ?',
+            'SELECT email, mobile, status FROM users WHERE email = ? OR mobile = ?',
             [email, mobile]
         );
         return rows;

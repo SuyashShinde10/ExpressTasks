@@ -108,8 +108,23 @@ We use the `Joi` library to enforce formatting rules. `Joi.string().email()` han
 ### 2. Database Constraint Checks
 Even if the formatting is correct, we must ensure the data doesn't violate database uniqueness rules.
 ```javascript
-const [rows] = await connection.query(
-    'SELECT email, mobile FROM users WHERE email = ? OR mobile = ?', [email, mobile]
-);
+const rows = await UserModel.findByEmailOrMobile(email, mobile);
+// Query: SELECT email, mobile, status FROM users WHERE email = ? OR mobile = ?
 ```
-We query the database. If any rows are returned, we loop through them to determine exactly *what* triggered the conflict (was it the email, the mobile, or both?) and return those specific details in a `409 Conflict` HTTP response.
+We query the database fetching `email`, `mobile`, **and `status`** for any matching record.
+
+### 3. DB-Side Status Validation
+Before checking for duplicates, we first verify the matched user's `status` field from the database:
+```javascript
+const inactiveUser = rows.find(row => row.status === 'Inactive');
+if (inactiveUser) {
+    return res.status(403).json({
+        error: 'Account inactive',
+        details: ['A user with this email or mobile exists but their account is Inactive.']
+    });
+}
+```
+This satisfies the task requirement that *"User status must be Active"* — not just at the input level (handled by Joi), but also at the database level. If any matched row has `status = 'Inactive'`, we immediately return a `403 Forbidden` response before even checking for email/mobile duplicates.
+
+### 4. Duplicate Email / Mobile Conflict Check
+If the matched user is `Active`, we then inspect exactly what triggered the conflict (email, mobile, or both) and return a `409 Conflict` with precise field-level details.

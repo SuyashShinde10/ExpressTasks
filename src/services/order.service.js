@@ -36,8 +36,13 @@ class OrderService {
                 itemsCount: orderData.items.length
             };
         } catch (error) {
+            console.error('Original transaction error:', error);
             if (connection) {
-                await connection.rollback();
+                try {
+                    await connection.rollback();
+                } catch (rollbackError) {
+                    console.error('Rollback failed:', rollbackError.message);
+                }
             }
             throw error;
         } finally {

@@ -53,8 +53,12 @@ To avoid the N+1 query problem, we extract data across three tables using a sing
 **Endpoint:** `POST /api/users/validate`
 
 - **Middleware Validation (`src/middlewares/validate.js`)**: A generic reusable Express middleware that intercepts requests and runs them against a Joi schema.
-- **Schemas (`src/utils/validationSchemas.js`)**: Defines the strict `userValidationSchema` (validating email format, exact 10-digit mobile, and strict 'Active' status).
-- **Controller (`src/controllers/user.controller.js`)**: If middleware validation passes, the controller uses the `UserModel` to query the database. It then determines exactly what triggered the conflict (email, mobile, or both) and returns a `409 Conflict`, or a `200 OK` if the data is pristine.
+- **Schemas (`src/utils/validationSchemas.js`)**: Defines the strict `userValidationSchema` (validating email format, exact 10-digit mobile, and strict 'Active' status at the input level via Joi).
+- **Model (`src/models/user.model.js`)**: The `findByEmailOrMobile` query now selects `email`, `mobile`, **and `status`** so the controller can perform a full DB-side status check.
+- **Controller (`src/controllers/user.controller.js`)**: Applies a **two-tier validation**:
+  1. If any matched user in the DB has `status = 'Inactive'` → returns `403 Forbidden` ("Account inactive").
+  2. If the matched user is Active but email/mobile conflicts → returns `409 Conflict` with field-level details.
+  3. If no matches → returns `200 OK` confirming the data is valid and safe to register.
 
 ## Final Review
 - **Separation of Concerns**: By separating Routes, Controllers, Services, and Models, the codebase is highly reusable and scalable.

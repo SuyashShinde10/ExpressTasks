@@ -2,12 +2,21 @@ const UserModel = require('../models/user.model');
 
 class UserController {
     static async validateUser(req, res) {
-        const { email, mobile } = req.validatedBody || req.body;
+        const { email, mobile } = req.validatedBody || req.body || {};
 
         try {
             const rows = await UserModel.findByEmailOrMobile(email, mobile);
 
             if (rows.length > 0) {
+                // Check if any matched user is Inactive
+                const inactiveUser = rows.find(row => row.status === 'Inactive');
+                if (inactiveUser) {
+                    return res.status(403).json({
+                        error: 'Account inactive',
+                        details: ['A user with this email or mobile exists but their account is Inactive.']
+                    });
+                }
+
                 const conflicts = [];
                 for (const row of rows) {
                     if (row.email === email && !conflicts.includes('Email already exists')) {
